@@ -1,5 +1,105 @@
 ---
 title: "STAR analysis"
 format: html
+execute: 
+  echo: false
 ---
+
+```{r,warning=FALSE}
+#| message: false
+#| label: setup
+library(tidyverse)
+library(primer.data)
+library(tidybayes)
+library(brms)
+```
+
+What people in which class type graduated high school?
+What is the probability that people in class type 3 with regular aid would graduate HS?
+
+ID per person, outcome=graduate HS (0,1)
+
+validity: Validity might not hold because, each student might be in a different grade level
+
+stability: Stability might not hold because, each students information might be taken at a different time --Teaching method in schools are very different nowadays-- and age
+
+representativeness: Might be a data of a specific state or place
+
+Unconfoundedness: If they took a test earlier to see what class type they were.
+
+Population table: Preceptor table
+
+```{r, warning=FALSE}
+#| message: false
+raw_df<-read.csv(file="./data/STAR.csv")|>
+    drop_na()
+```
+
+```{r, warning=FALSE}
+#| message: false
+# Recode 'race' to create a factor variable with four levels
+x <- raw_df |>
+  mutate(
+    race = case_when(
+      race == 1 ~ "white",
+      race == 2 ~ "black",
+      race == 3 ~ "asian",
+      race == 4 ~ "hispanic",
+      race == 5 ~ "native_american",
+      race == 6 ~ "others",
+      TRUE ~ as.character(race)
+    ),
+    race = factor(race),
+    race = fct_collapse(race,
+      white = "white",
+      black = "black",
+      hispanic = "hispanic",
+      others = c("asian", "native_american", "others")
+    )
+  ) |>
+  mutate(
+    kinder = case_when(
+      classtype == 1 ~ "small",
+      classtype == 2 ~ "regular",
+      classtype == 3 ~ "regular aid",
+      TRUE ~ as.character(classtype)
+    ),
+    kinder = factor(kinder, levels = c("small", "regular", "regular aid"))
+  ) |>
+  select(hsgrad, kinder) |>
+  filter(kinder == c("regular aid", "regular"))  |>
+  drop_na()
+```
+
+
+```{r}
+#| cache: true
+fit_cs <- brm(formula = hsgrad ~ kinder,
+             data = x,
+             family = gaussian(),
+             silent = 2,
+             refresh = 0,
+             seed = 1)
+```
+
+```{r}
+ndata<-tibble(kinder = c("regular aid", "regular"))
+fit_cs|>
+  add_epred_draws(newdata=ndata)|>
+    ggplot(aes(x=.epred, fill=kinder))+
+    geom_density(alpha=0.5)+
+    scale_x_continuous(labels=scales::percent_format())+
+    labs(title="Analysis on Aid in Classrooms and Graduation Rates",
+         subtitle="Class Type affects the graduation rate",
+         x="Probability of Graduating High School",
+         caption="Data from: STAR",
+         fill="Type of Class")+
+    theme_classic()+
+    theme(axis.ticks.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.title.y = element_blank())
+
+#fit_cs|>
+#    add_epred_draws(newdata=ndata)
+```
 
